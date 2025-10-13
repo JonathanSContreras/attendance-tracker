@@ -1,0 +1,38 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Student {
+  id        Int        @id @default(autoincrement())
+  sid       String     @unique  // column A (your student ID string)
+  name      String
+  email     String     @unique
+  createdAt DateTime   @default(now())
+  checkins  Checkin[]
+
+  @@index([name])
+}
+
+
+model Session {
+  id        Int        @id @default(autoincrement())
+  date      DateTime   @unique
+  createdAt DateTime   @default(now())
+  checkins  Checkin[]
+}
+
+model Checkin {
+  id        Int      @id @default(autoincrement())
+  student   Student  @relation(fields: [studentId], references: [id])
+  studentId Int
+  session   Session  @relation(fields: [sessionId], references: [id])
+  sessionId Int
+  createdAt DateTime @default(now())
+
+  @@unique([studentId, sessionId]) // prevent double check-in same day
+}
