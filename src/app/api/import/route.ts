@@ -75,8 +75,8 @@ export async function POST(req: Request) {
     if (!sid || !name || !email) continue;
 
     const student = await prisma.student.upsert({
-      where: { sid },
-      update: { name, email }, // keep info fresh if changed
+      where: { email },
+      update: { sid, name },
       create: { sid, name, email },
       select: { id: true }
     });

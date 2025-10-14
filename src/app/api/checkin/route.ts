@@ -40,3 +40,38 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ ok: true });
 }
+
+export async function DELETE(req: Request) {
+  const { studentId, sessionDate } = await req.json();
+  if (!studentId || !sessionDate) {
+    return NextResponse.json(
+      { ok: false, error: "studentId and sessionDate required" },
+      { status: 400 }
+    );
+  }
+
+  const d = normalizeDateOnly(sessionDate);
+
+  // Find the session
+  const session = await prisma.session.findUnique({
+    where: { date: d },
+  });
+
+  if (!session) {
+    return NextResponse.json({ ok: false, error: "Session not found" }, { status: 404 });
+  }
+
+  // Delete the checkin
+  const deleted = await prisma.checkin.deleteMany({
+    where: {
+      studentId,
+      sessionId: session.id,
+    },
+  });
+
+  if (deleted.count === 0) {
+    return NextResponse.json({ ok: false, error: "Check-in not found" }, { status: 404 });
+  }
+
+  return NextResponse.json({ ok: true });
+}

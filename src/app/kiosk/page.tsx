@@ -35,12 +35,19 @@ export default function Kiosk() {
 
   const filtered = useMemo(() => {
     const s = q.toLowerCase();
-    return roster.filter(r =>
-      !checkedIn.includes(r.id) &&
-      (r.name.toLowerCase().includes(s) ||
-        r.email.toLowerCase().includes(s) ||
-        r.sid.toLowerCase().includes(s))
+    const matches = roster.filter(r =>
+      r.name.toLowerCase().includes(s) ||
+      r.email.toLowerCase().includes(s) ||
+      r.sid.toLowerCase().includes(s)
     );
+
+    // Sort: unchecked students first, then checked-in students at bottom
+    return matches.sort((a, b) => {
+      const aChecked = checkedIn.includes(a.id);
+      const bChecked = checkedIn.includes(b.id);
+      if (aChecked === bChecked) return 0;
+      return aChecked ? 1 : -1; // unchecked first
+    });
   }, [roster, q, checkedIn]);
 
   async function checkinById(id:number) {
@@ -56,6 +63,21 @@ export default function Kiosk() {
       showToast("Checked in successfully!", "ok");
     } else {
       showToast(data.error || "Check-in failed", "err");
+    }
+  }
+
+  async function uncheckoutById(id:number) {
+    const res = await fetch("/api/checkin", {
+      method: "DELETE",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ studentId: id, sessionDate }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      setCheckedIn(prev => prev.filter(sid => sid !== id));
+      showToast("Check-in undone", "ok");
+    } else {
+      showToast(data.error || "Undo failed", "err");
     }
   }
 
@@ -124,7 +146,7 @@ export default function Kiosk() {
         {/* Search Bar */}
         <div className="relative">
           <input
-            className="w-full border-2 border-gray-300 rounded-xl px-6 py-4 text-xl focus:border-blue-500 focus:outline-none shadow-lg placeholder:text-gray-500"
+            className="text-black w-full border-2 border-gray-300 rounded-xl px-6 py-4 text-xl focus:border-blue-500 focus:outline-none shadow-lg placeholder:text-gray-500"
             placeholder="🔍 Search by name, ID, or email..."
             value={q}
             onChange={(e)=>setQ(e.target.value)}
@@ -147,20 +169,45 @@ export default function Kiosk() {
           <div className="max-h-[55vh] overflow-auto">
             {filtered.length > 0 ? (
               <div className="divide-y divide-gray-200">
-                {filtered.map(s => (
-                  <div key={s.id} className="flex items-center justify-between p-5 hover:bg-blue-50 transition-colors">
-                    <div className="flex flex-col flex-1">
-                      <span className="text-xl font-semibold text-gray-800">{s.name}</span>
-                      <span className="text-sm text-gray-500 mt-1">{s.sid} • {s.email}</span>
-                    </div>
-                    <button
-                      className="ml-4 px-8 py-3 rounded-xl bg-gradient-to-r from-green-500 to-green-600 text-white text-lg font-bold hover:from-green-600 hover:to-green-700 transition-all shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95"
-                      onClick={() => checkinById(s.id)}
+                {filtered.map(s => {
+                  const isCheckedIn = checkedIn.includes(s.id);
+                  return (
+                    <div
+                      key={s.id}
+                      className={`flex items-center justify-between p-5 transition-colors ${
+                        isCheckedIn ? "bg-gray-50 hover:bg-gray-100" : "hover:bg-blue-50"
+                      }`}
                     >
-                      Check In
-                    </button>
-                  </div>
-                ))}
+                      <div className="flex flex-col flex-1">
+                        <span className={`text-xl font-semibold ${
+                          isCheckedIn ? "text-gray-400 line-through" : "text-gray-800"
+                        }`}>
+                          {s.name}
+                        </span>
+                        <span className={`text-sm mt-1 ${
+                          isCheckedIn ? "text-gray-400" : "text-gray-500"
+                        }`}>
+                          {s.sid} • {s.email}
+                        </span>
+                      </div>
+                      {isCheckedIn ? (
+                        <button
+                          className="ml-4 px-8 py-3 rounded-xl bg-gradient-to-r from-gray-400 to-gray-500 text-white text-lg font-bold hover:from-gray-500 hover:to-gray-600 transition-all shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95"
+                          onClick={() => uncheckoutById(s.id)}
+                        >
+                          Undo
+                        </button>
+                      ) : (
+                        <button
+                          className="ml-4 px-8 py-3 rounded-xl bg-gradient-to-r from-green-500 to-green-600 text-white text-lg font-bold hover:from-green-600 hover:to-green-700 transition-all shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95"
+                          onClick={() => checkinById(s.id)}
+                        >
+                          Check In
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <div className="py-20 text-center">
@@ -174,8 +221,8 @@ export default function Kiosk() {
                     <svg className="w-20 h-20 text-green-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <p className="text-2xl text-gray-700 font-semibold">All checked in!</p>
-                    <p className="text-lg text-gray-500 mt-2">Great job everyone</p>
+                    <p className="text-2xl text-gray-700 font-semibold">No students found</p>
+                    <p className="text-lg text-gray-500 mt-2">Try adjusting your search</p>
                   </>
                 )}
               </div>
