@@ -1,6 +1,6 @@
 datasource db {
   provider = "sqlite"
-  url      = "file:./dev.db"
+  url      = env("DATABASE_URL")
 }
 
 generator client {
@@ -9,7 +9,7 @@ generator client {
 
 model Student {
   id        Int        @id @default(autoincrement())
-  sid       String     @unique  // column A (your student ID string)
+  sid       String     @unique // institution student ID (column A of the roster sheet)
   name      String
   email     String     @unique
   createdAt DateTime   @default(now())
@@ -17,7 +17,6 @@ model Student {
 
   @@index([name])
 }
-
 
 model Session {
   id        Int        @id @default(autoincrement())
@@ -34,5 +33,5 @@ model Checkin {
   sessionId Int
   createdAt DateTime @default(now())
 
-  @@unique([studentId, sessionId]) // prevent double check-in same day
+  @@unique([studentId, sessionId]) // one check-in per student per day
 }
