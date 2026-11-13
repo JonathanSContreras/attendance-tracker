@@ -1,7 +1,10 @@
 {
-  "name": "attendace-tracker",
+  "name": "attendance-tracker",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=18.18"
+  },
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
@@ -10,12 +13,10 @@
   },
   "dependencies": {
     "@prisma/client": "^6.17.1",
-    "next": "15.5.5",
-    "prisma": "^6.17.1",
-    "qrcode": "^1.5.4",
-    "react": "19.1.0",
-    "react-dom": "19.1.0",
-    "xlsx": "^0.18.5"
+    "next": "15.5.29",
+    "react": "19.1.10",
+    "react-dom": "19.1.10",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
@@ -24,7 +25,8 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "15.5.5",
+    "eslint-config-next": "15.5.29",
+    "prisma": "^6.17.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
