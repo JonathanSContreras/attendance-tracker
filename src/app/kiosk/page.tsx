@@ -42,10 +42,22 @@ export default function Kiosk() {
     );
 
     // Sort: unchecked students first, then checked-in students at bottom
+    // Within checked-in students, sort by check-in order (most recent first)
     return matches.sort((a, b) => {
       const aChecked = checkedIn.includes(a.id);
       const bChecked = checkedIn.includes(b.id);
-      if (aChecked === bChecked) return 0;
+
+      // If both have same check-in status
+      if (aChecked === bChecked) {
+        // If both are checked in, sort by reverse check-in order (most recent first)
+        if (aChecked) {
+          const aIndex = checkedIn.indexOf(a.id);
+          const bIndex = checkedIn.indexOf(b.id);
+          return bIndex - aIndex; // Higher index (more recent) comes first
+        }
+        return 0; // If both unchecked, maintain original order
+      }
+
       return aChecked ? 1 : -1; // unchecked first
     });
   }, [roster, q, checkedIn]);
@@ -58,9 +70,11 @@ export default function Kiosk() {
     });
     const data = await res.json();
     if (data.ok) {
+      const student = roster.find(r => r.id === id);
+      const studentName = student ? student.name : "Student";
       setCheckedIn(prev => [...prev, id]);
       setQ(""); // Clear search after check-in
-      showToast("Checked in successfully!", "ok");
+      showToast(`${studentName} checked in!`, "ok");
     } else {
       showToast(data.error || "Check-in failed", "err");
     }
