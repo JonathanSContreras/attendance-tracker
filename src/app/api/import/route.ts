@@ -1,105 +1,107 @@
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { prisma } from "@/lib/db";
+import { isDateKey, parseDateOnly, startOfDay } from "@/lib/dates";
 
-function normalizeDateOnly(d: Date) {
-  // Normalize to local midnight without timezone issues
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
+type SheetRow = Record<string, unknown>;
 
-function parseExcelDates(header: string): Date | null {
-  // Try JS/ISO-like
-  const t = Date.parse(header);
-  if (!Number.isNaN(t)) return normalizeDateOnly(new Date(t));
+const PRESENT_VALUES = new Set(["present", "p", "x", "1", "yes", "y"]);
 
-  // Try Excel serial number
-  const n = Number(header);
-  if (!Number.isNaN(n)) {
-    const epoch = new Date(Date.UTC(1899, 11, 30));
-    const ms = n * 86400000;
-    return normalizeDateOnly(new Date(epoch.getTime() + ms));
+/** Interpret a column header as a session date, or return null if it isn't one. */
+function parseHeaderDate(header: string): Date | null {
+  const h = header.trim();
+  if (isDateKey(h)) return parseDateOnly(h);
+
+  // Excel serial date (days since 1899-12-30)
+  if (/^\d+(\.\d+)?$/.test(h)) {
+    const d = new Date(Date.UTC(1899, 11, 30) + Number(h) * 86_400_000);
+    return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
   }
-  return null;
+
+  // Anything else Date can parse, e.g. "10/13/25" or "Oct 13 2025"
+  const t = Date.parse(h);
+  return Number.isNaN(t) ? null : startOfDay(new Date(t));
 }
 
-function isPresent(val: any): boolean {
-  const s = String(val ?? "").trim().toLowerCase();
-  // treat these as present; everything else (incl. empty) = absent
-  return ["present", "p", "x", "1", "yes", "y"].includes(s);
+function isPresent(val: unknown): boolean {
+  return PRESENT_VALUES.has(String(val ?? "").trim().toLowerCase());
 }
 
+// POST /api/import (multipart, field "file") -> upsert students, sessions, and historical attendance
 export async function POST(req: Request) {
   const form = await req.formData();
-  const file = form.get("file") as File | null;
-  if (!file) return NextResponse.json({ ok: false, error: "No file" }, { status: 400 });
+  const file = form.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return NextResponse.json({ ok: false, error: "No file uploaded" }, { status: 400 });
+  }
 
-  const buf = Buffer.from(await file.arrayBuffer());
-  const wb = XLSX.read(buf, { type: "buffer" });
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json<Record<string, any>>(ws, { defval: "" });
+  const wb = XLSX.read(Buffer.from(await file.arrayBuffer()), { type: "buffer" });
+  const rows = XLSX.utils.sheet_to_json<SheetRow>(wb.Sheets[wb.SheetNames[0]], { defval: "" });
+  if (!rows.length) {
+    return NextResponse.json({ ok: false, error: "Empty sheet" }, { status: 400 });
+  }
 
-  if (!rows.length) return NextResponse.json({ ok: false, error: "Empty sheet" }, { status: 400 });
-
-  // Expect columns: A=ID, B=Name, C=Email. We’ll detect their headers.
-  const headers = Object.keys(rows[0]).map(h => h.trim());
-  const idHeader    = headers.find(h => h.toLowerCase() === "id");
-  const nameHeader  = headers.find(h => h.toLowerCase() === "name");
-  const emailHeader = headers.find(h => h.toLowerCase() === "email");
-
+  const headers = Object.keys(rows[0]);
+  const findHeader = (name: string) => headers.find((h) => h.trim().toLowerCase() === name);
+  const idHeader = findHeader("id");
+  const nameHeader = findHeader("name");
+  const emailHeader = findHeader("email");
   if (!idHeader || !nameHeader || !emailHeader) {
-    return NextResponse.json({ ok: false, error: "Missing required headers: ID, Name, Email" }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: "Missing required headers: ID, Name, Email" },
+      { status: 400 }
+    );
   }
 
-  // Date headers are all columns after C (not ID/Name/Email)
-  const dateHeaders = headers.filter(h => ![idHeader, nameHeader, emailHeader].includes(h));
-  const sessionByISO = new Map<string, number>();
+  // Every other column whose header parses as a date is a past session.
+  const dateColumns = headers
+    .filter((h) => h !== idHeader && h !== nameHeader && h !== emailHeader)
+    .map((header) => ({ header, date: parseHeaderDate(header) }))
+    .filter((c): c is { header: string; date: Date } => c.date !== null);
 
-  // Upsert sessions (one per date col)
-  for (const h of dateHeaders) {
-    const d = parseExcelDates(h);
-    if (!d) continue;
-    const s = await prisma.session.upsert({
-      where: { date: d },
-      update: {},
-      create: { date: d },
-      select: { id: true, date: true }
-    });
-    sessionByISO.set(d.toISOString(), s.id);
-  }
+  const result = await prisma.$transaction(
+    async (tx) => {
+      const sessionIds = new Map<string, number>();
+      for (const { header, date } of dateColumns) {
+        const s = await tx.session.upsert({
+          where: { date },
+          update: {},
+          create: { date },
+          select: { id: true },
+        });
+        sessionIds.set(header, s.id);
+      }
 
-  // Upsert students + historical PRESENT marks
-  for (const row of rows) {
-    const sid   = String(row[idHeader]).trim();
-    const name  = String(row[nameHeader]).trim();
-    const email = String(row[emailHeader]).trim();
-    if (!sid || !name || !email) continue;
+      let imported = 0;
+      for (const row of rows) {
+        const sid = String(row[idHeader]).trim();
+        const name = String(row[nameHeader]).trim();
+        const email = String(row[emailHeader]).trim();
+        if (!sid || !name || !email) continue;
 
-    const student = await prisma.student.upsert({
-      where: { email },
-      update: { sid, name },
-      create: { sid, name, email },
-      select: { id: true }
-    });
+        const student = await tx.student.upsert({
+          where: { email },
+          update: { sid, name },
+          create: { sid, name, email },
+          select: { id: true },
+        });
+        imported++;
 
-    for (const h of dateHeaders) {
-      const d = parseExcelDates(h);
-      if (!d) continue;
-      if (!isPresent(row[h])) continue; // only create checkins for "present"
+        for (const { header } of dateColumns) {
+          if (!isPresent(row[header])) continue;
+          const sessionId = sessionIds.get(header)!;
+          await tx.checkin.upsert({
+            where: { studentId_sessionId: { studentId: student.id, sessionId } },
+            update: {},
+            create: { studentId: student.id, sessionId },
+          });
+        }
+      }
 
-      const sessionId = sessionByISO.get(d.toISOString());
-      if (!sessionId) continue;
+      return { imported, sessions: sessionIds.size };
+    },
+    { timeout: 30_000 }
+  );
 
-      await prisma.checkin.upsert({
-        where: { studentId_sessionId: { studentId: student.id, sessionId } },
-        update: {},
-        create: { studentId: student.id, sessionId }
-      });
-    }
-  }
-
-  return NextResponse.json({
-    ok: true,
-    students: await prisma.student.count(),
-    sessions: sessionByISO.size
-  });
+  return NextResponse.json({ ok: true, ...result });
 }

@@ -1,25 +1,22 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { isDateKey, parseDateOnly } from "@/lib/dates";
 
-function normalizeDateOnly(dateStr: string) {
-  // Parse YYYY-MM-DD format without timezone issues
-  const [year, month, day] = dateStr.split('-').map(Number);
-  return new Date(year, month - 1, day);
-}
-
+// GET /api/checkins?date=YYYY-MM-DD -> student ids checked in for that day, oldest first
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const date = searchParams.get("date");
-  if (!date) return NextResponse.json({ ok: false, error: "date required" }, { status: 400 });
+  const date = new URL(req.url).searchParams.get("date");
+  if (!isDateKey(date)) {
+    return NextResponse.json({ ok: false, error: "date (YYYY-MM-DD) required" }, { status: 400 });
+  }
 
-  const d = normalizeDateOnly(date);
-  const session = await prisma.session.findUnique({ where: { date: d } });
+  const session = await prisma.session.findUnique({ where: { date: parseDateOnly(date) } });
   if (!session) return NextResponse.json({ ok: true, studentIds: [] });
 
   const checkins = await prisma.checkin.findMany({
     where: { sessionId: session.id },
     select: { studentId: true },
+    orderBy: { createdAt: "asc" },
   });
 
-  return NextResponse.json({ ok: true, studentIds: checkins.map(c => c.studentId) });
+  return NextResponse.json({ ok: true, studentIds: checkins.map((c) => c.studentId) });
 }

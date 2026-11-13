@@ -1,74 +1,68 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { isDateKey, parseDateOnly } from "@/lib/dates";
 
-function normalizeDateOnly(dateStr: string) {
-  // Parse YYYY-MM-DD format without timezone issues
-  const [year, month, day] = dateStr.split('-').map(Number);
-  return new Date(year, month - 1, day);
+type CheckinBody = { studentId?: unknown; sessionDate?: unknown };
+
+function parseBody(body: CheckinBody) {
+  const { studentId, sessionDate } = body;
+  if (typeof studentId !== "number" || !Number.isInteger(studentId) || !isDateKey(sessionDate)) {
+    return null;
+  }
+  return { studentId, date: parseDateOnly(sessionDate) };
 }
 
+// POST /api/checkin { studentId, sessionDate: "YYYY-MM-DD" }
 export async function POST(req: Request) {
-  const { studentId, sessionDate } = await req.json();
-  if (!studentId || !sessionDate) {
+  const parsed = parseBody(await req.json());
+  if (!parsed) {
     return NextResponse.json(
-      { ok: false, error: "studentId and sessionDate required" },
+      { ok: false, error: "studentId (number) and sessionDate (YYYY-MM-DD) required" },
       { status: 400 }
     );
   }
 
-  const d = normalizeDateOnly(sessionDate);
-
-  // Ensure session exists
   const session = await prisma.session.upsert({
-    where: { date: d },
+    where: { date: parsed.date },
     update: {},
-    create: { date: d },
+    create: { date: parsed.date },
   });
 
-  // Check if already checked in
-  const existing = await prisma.checkin.findUnique({
-    where: { studentId_sessionId: { studentId, sessionId: session.id } },
-  });
-  if (existing) {
-    return NextResponse.json({ ok: false, error: "Already checked in" }, { status: 400 });
+  try {
+    await prisma.checkin.create({
+      data: { studentId: parsed.studentId, sessionId: session.id },
+    });
+  } catch (err) {
+    // The @@unique([studentId, sessionId]) constraint rejects double check-ins,
+    // including two taps that race each other.
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      return NextResponse.json({ ok: false, error: "Already checked in" }, { status: 409 });
+    }
+    throw err;
   }
-
-  // Create checkin
-  await prisma.checkin.create({
-    data: { studentId, sessionId: session.id },
-  });
 
   return NextResponse.json({ ok: true });
 }
 
+// DELETE /api/checkin { studentId, sessionDate: "YYYY-MM-DD" } -> undo a check-in
 export async function DELETE(req: Request) {
-  const { studentId, sessionDate } = await req.json();
-  if (!studentId || !sessionDate) {
+  const parsed = parseBody(await req.json());
+  if (!parsed) {
     return NextResponse.json(
-      { ok: false, error: "studentId and sessionDate required" },
+      { ok: false, error: "studentId (number) and sessionDate (YYYY-MM-DD) required" },
       { status: 400 }
     );
   }
 
-  const d = normalizeDateOnly(sessionDate);
-
-  // Find the session
-  const session = await prisma.session.findUnique({
-    where: { date: d },
-  });
-
+  const session = await prisma.session.findUnique({ where: { date: parsed.date } });
   if (!session) {
     return NextResponse.json({ ok: false, error: "Session not found" }, { status: 404 });
   }
 
-  // Delete the checkin
   const deleted = await prisma.checkin.deleteMany({
-    where: {
-      studentId,
-      sessionId: session.id,
-    },
+    where: { studentId: parsed.studentId, sessionId: session.id },
   });
-
   if (deleted.count === 0) {
     return NextResponse.json({ ok: false, error: "Check-in not found" }, { status: 404 });
   }

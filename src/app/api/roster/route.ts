@@ -1,7 +1,7 @@
-// src/app/api/roster/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
+// GET /api/roster -> every student, alphabetical
 export async function GET() {
   const students = await prisma.student.findMany({
     orderBy: { name: "asc" },

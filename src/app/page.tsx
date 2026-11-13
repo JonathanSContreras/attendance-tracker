@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
+import { todayKey } from "@/lib/dates";
 
 export default function Admin() {
   const [sessions, setSessions] = useState<{ id: number; date: string }[]>([]);
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(todayKey);
+  const [importing, setImporting] = useState(false);
   const [toast, setToast] = useState<{ msg: string; kind: "success" | "error" | null }>({ msg: "", kind: null });
 
   function showToast(msg: string, kind: "success" | "error" = "success") {
@@ -44,6 +46,27 @@ export default function Admin() {
       showToast(`Cleared ${data.cleared} check-in(s) for ${date}`);
     } else {
       showToast(data.error || "Failed to clear session", "error");
+    }
+  }
+
+  async function importRoster(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    setImporting(true);
+    try {
+      const res = await fetch("/api/import", { method: "POST", body: new FormData(form) });
+      const data = await res.json();
+      if (data.ok) {
+        form.reset();
+        await loadSessions();
+        showToast(`Imported ${data.imported} student(s) and ${data.sessions} past session(s)`);
+      } else {
+        showToast(data.error || "Import failed", "error");
+      }
+    } catch {
+      showToast("Import failed: could not read that file", "error");
+    } finally {
+      setImporting(false);
     }
   }
 
@@ -116,7 +139,7 @@ export default function Admin() {
                       key={s.id}
                       className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium"
                     >
-                      {s.date.slice(0, 10)}
+                      {s.date}
                     </span>
                   ))}
                 </div>
@@ -128,25 +151,22 @@ export default function Admin() {
         {/* Import Excel */}
         <div className="bg-white rounded-lg shadow-lg p-6">
           <h2 className="text-2xl font-semibold text-gray-800 mb-4">Import Roster</h2>
-          <form
-            method="post"
-            action="/api/import"
-            encType="multipart/form-data"
-            className="space-y-4"
-          >
+          <form onSubmit={importRoster} className="space-y-4">
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 hover:border-blue-400 transition-colors">
               <input
                 type="file"
                 name="file"
                 accept=".xlsx,.xls"
+                required
                 className="w-full text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
               />
             </div>
             <button
               type="submit"
-              className="w-full px-6 py-3 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors shadow-md"
+              disabled={importing}
+              className="w-full px-6 py-3 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors shadow-md disabled:opacity-60 disabled:cursor-wait"
             >
-              Upload & Import
+              {importing ? "Importing…" : "Upload & Import"}
             </button>
           </form>
           <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import { todayKey } from "@/lib/dates";
 
 type RosterItem = { id:number; sid:string; name:string; email:string };
 
@@ -7,15 +8,13 @@ export default function Kiosk() {
   const [roster, setRoster] = useState<RosterItem[]>([]);
   const [checkedIn, setCheckedIn] = useState<number[]>([]);
   const [q, setQ] = useState("");
-  const [sessionDate, setSessionDate] = useState(() =>
-    new Date().toISOString().slice(0,10)
-  );
+  const [sessionDate, setSessionDate] = useState(todayKey);
 
   // simple toast
   const [toast, setToast] = useState<{msg:string; kind:"ok"|"err"|null}>({msg:"", kind:null});
   function showToast(msg:string, kind:"ok"|"err"="ok") {
     setToast({ msg, kind });
-    if ("vibrate" in navigator) (navigator as any).vibrate?.(kind === "ok" ? 30 : [50,30,50]);
+    navigator.vibrate?.(kind === "ok" ? 30 : [50, 30, 50]); // haptic feedback on supported tablets
     setTimeout(() => setToast({ msg:"", kind:null }), 1500);
   }
 
@@ -41,24 +40,15 @@ export default function Kiosk() {
       r.sid.toLowerCase().includes(s)
     );
 
-    // Sort: unchecked students first, then checked-in students at bottom
-    // Within checked-in students, sort by check-in order (most recent first)
+    // Unchecked students first (roster order), then checked-in students, most recent first.
+    const order = new Map(checkedIn.map((id, i) => [id, i]));
     return matches.sort((a, b) => {
-      const aChecked = checkedIn.includes(a.id);
-      const bChecked = checkedIn.includes(b.id);
-
-      // If both have same check-in status
-      if (aChecked === bChecked) {
-        // If both are checked in, sort by reverse check-in order (most recent first)
-        if (aChecked) {
-          const aIndex = checkedIn.indexOf(a.id);
-          const bIndex = checkedIn.indexOf(b.id);
-          return bIndex - aIndex; // Higher index (more recent) comes first
-        }
-        return 0; // If both unchecked, maintain original order
-      }
-
-      return aChecked ? 1 : -1; // unchecked first
+      const ai = order.get(a.id);
+      const bi = order.get(b.id);
+      if (ai === undefined && bi === undefined) return 0;
+      if (ai === undefined) return -1;
+      if (bi === undefined) return 1;
+      return bi - ai;
     });
   }, [roster, q, checkedIn]);
 
@@ -80,7 +70,7 @@ export default function Kiosk() {
     }
   }
 
-  async function uncheckoutById(id:number) {
+  async function undoCheckin(id:number) {
     const res = await fetch("/api/checkin", {
       method: "DELETE",
       headers: {"Content-Type":"application/json"},
@@ -207,7 +197,7 @@ export default function Kiosk() {
                       {isCheckedIn ? (
                         <button
                           className="ml-4 px-8 py-3 rounded-xl bg-gradient-to-r from-gray-400 to-gray-500 text-white text-lg font-bold hover:from-gray-500 hover:to-gray-600 transition-all shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95"
-                          onClick={() => uncheckoutById(s.id)}
+                          onClick={() => undoCheckin(s.id)}
                         >
                           Undo
                         </button>
