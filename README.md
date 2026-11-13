@@ -1,220 +1,106 @@
-# 📋 Attendance Tracker
+# Attendance Tracker
 
-## The Story
+[![CI](https://github.com/JonathanSContreras/attendance-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/JonathanSContreras/attendance-tracker/actions/workflows/ci.yml)
+![Next.js](https://img.shields.io/badge/Next.js-15-black)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6)
+![Prisma](https://img.shields.io/badge/Prisma-SQLite-2d3748)
 
-I'm a TA for an introductory course and the professor asked me to keep track of attendance. Initially, he asked for it to be done via paper and manually transferred to an Excel sheet. BUT nobody has time for that, so instead I decided to create this project to do that for me lol.
+A self-service check-in kiosk for classroom attendance. Students find their name on a tablet by the door and tap **Check In**. The instructor gets an Excel sheet with present/absent marks for every class meeting.
 
-This web app transforms the tedious paper-and-pen attendance process into a streamlined digital kiosk system that students can use to check themselves in. No more shuffling papers, no more manual data entry—just tap your name and you're done!
+I built it while working as a TA for an intro course. The professor wanted attendance taken on paper and typed into a spreadsheet afterward. This replaced both steps, and because it reads and writes the same spreadsheet layout, the professor's existing workflow didn't have to change.
 
-## ✨ Features
+| Check-in kiosk | Admin dashboard |
+| --- | --- |
+| ![Kiosk](docs/screenshots/kiosk.png) | ![Admin dashboard](docs/screenshots/admin.png) |
 
-### 🖥️ Admin Dashboard
-- **Import existing rosters** from Excel files (supports `.xlsx` and `.xls`)
-- **Session management** - Create, view, and clear attendance sessions by date
-- **Export to Excel** - Download attendance reports with present/absent status
-- **Real-time session tracking** - See all active sessions at a glance
-- **Modern UI** - Clean, card-based interface with intuitive navigation
+<sub>Screenshots use the fictional demo roster from `npm run db:seed`.</sub>
 
-### 📱 Check-In Kiosk
-- **Touch-optimized** - Large buttons perfect for iPad or tablet use
-- **Real-time search** - Find students by name, ID, or email
-- **Live statistics** - See total students, checked-in count, and remaining
-- **Auto-clearing search** - Search resets after each check-in for faster workflow
-- **Visual feedback** - Toast notifications and haptic feedback on mobile devices
-- **Persistent data** - Check-ins persist across page refreshes
-- **Session switching** - Easily switch between different dates
+## Features
 
-### 🔒 Data Management
-- **SQLite database** - All data stored locally and persistently
-- **Duplicate prevention** - Students can't check in twice for the same session
-- **Upsert logic** - Importing Excel files updates existing students without creating duplicates
-- **Date normalization** - Handles timezone issues to ensure accurate date tracking
+**Kiosk** (`/kiosk`)
+- Search the roster by name, student ID, or email as you type
+- Large touch targets for tablets, haptic feedback where supported
+- Live counts of total, checked-in, and remaining students
+- Students who have checked in drop to the bottom, most recent first, with an **Undo** button for mis-taps
+- The search box clears after each check-in, ready for the next student in line
 
-## 🛠️ Tech Stack
+**Admin dashboard** (`/`)
+- Import a roster from `.xlsx`/`.xls`, including historical attendance columns
+- Create or clear sessions by date
+- Export a spreadsheet with one row per student and one present/absent column per session
 
-- **Framework**: [Next.js 15](https://nextjs.org/) (App Router)
-- **Language**: [TypeScript](https://www.typescriptlang.org/)
-- **Database**: [Prisma](https://www.prisma.io/) + SQLite
-- **Styling**: [Tailwind CSS](https://tailwindcss.com/)
-- **Excel Handling**: [SheetJS (xlsx)](https://sheetjs.com/)
-- **Runtime**: Node.js
+## Tech stack
 
-## 📦 Installation
+- **Next.js 15** (App Router, Route Handlers) with **React 19** and **TypeScript**
+- **Prisma** ORM on **SQLite**
+- **Tailwind CSS 4**
+- **SheetJS** for reading and writing Excel files
+- **GitHub Actions** CI: lint, type-check, migrate, seed, and production build
 
-### Prerequisites
-- Node.js 18+ and npm installed
-- Git
+## Getting started
 
-### Setup Steps
+Requires Node.js 18.18 or newer.
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/yourusername/attendance-tracker.git
-   cd attendance-tracker
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Set up the database**
-   ```bash
-   npx prisma generate
-   npx prisma db push
-   ```
-
-4. **Run the development server**
-   ```bash
-   npm run dev
-   ```
-
-5. **Open your browser**
-   - Admin dashboard: [http://localhost:3000](http://localhost:3000)
-   - Check-in kiosk: [http://localhost:3000/kiosk](http://localhost:3000/kiosk)
-
-## 📖 Usage Guide
-
-### Getting Started
-
-1. **Import Your Roster** (Optional but recommended)
-   - Go to the admin dashboard at `http://localhost:3000`
-   - Upload an Excel file with your student roster
-   - **Required format:**
-     - Column A: `ID` (Student ID)
-     - Column B: `Name` (Full name)
-     - Column C: `Email` (Email address)
-     - Remaining columns: Date headers for existing attendance data (optional)
-
-2. **Create a Session**
-   - Select today's date (or any date you want)
-   - Click "Create Session"
-
-3. **Open the Kiosk**
-   - Click "Open Check-In Kiosk" or navigate to `/kiosk`
-   - Display this page on an iPad/tablet in your classroom
-   - Students can search their name and tap "Check In"
-
-4. **Export Attendance**
-   - Return to the admin dashboard
-   - Click "Download Excel Report"
-   - Get a complete attendance report with present/absent status for all sessions
-
-### Features in Detail
-
-#### Search Functionality
-- Search works across student names, IDs, and email addresses
-- Real-time filtering as you type
-- Students who have already checked in are automatically hidden from the list
-
-#### Session Management
-- Each date creates a unique session
-- Check-ins are tied to specific sessions
-- You can switch between dates to view historical attendance
-- "Clear Session" deletes all check-ins for that date (use carefully!)
-
-#### Data Persistence
-- All data is stored in `prisma/dev.db`
-- You can close and restart the server anytime
-- Data persists across server restarts
-- **Important**: Keep this file backed up, and don't commit it to git (sensitive student data!)
-
-## 🎨 Screenshots
-
-> Add screenshots here showing:
-> - Admin dashboard
-> - Kiosk check-in interface
-> - Excel import/export examples
-
-## 📁 Project Structure
-
-```
-attendance-tracker/
-├── prisma/
-│   ├── schema.prisma          # Database schema
-│   ├── migrations/            # Database migrations
-│   └── dev.db                 # SQLite database (gitignored)
-├── src/
-│   ├── app/
-│   │   ├── api/               # API routes
-│   │   │   ├── checkin/       # POST check-in endpoint
-│   │   │   ├── checkins/      # GET checked-in students
-│   │   │   ├── clear/         # POST clear session
-│   │   │   ├── export/        # GET Excel export
-│   │   │   ├── import/        # POST Excel import
-│   │   │   ├── roster/        # GET all students
-│   │   │   └── sessions/      # GET/POST sessions
-│   │   ├── kiosk/
-│   │   │   └── page.tsx       # Check-in kiosk UI
-│   │   ├── page.tsx           # Admin dashboard
-│   │   └── layout.tsx         # Root layout
-│   └── lib/
-│       └── db.ts              # Prisma client setup
-├── .gitignore
-├── package.json
-├── tsconfig.json
-├── tailwind.config.ts
-└── README.md
+```bash
+git clone https://github.com/JonathanSContreras/attendance-tracker.git
+cd attendance-tracker
+npm install
+cp .env.example .env
+npx prisma migrate dev   # creates prisma/dev.db
+npm run db:seed          # optional: 20 fictional students and 4 past sessions
+npm run dev
 ```
 
-## 🚀 Deployment
+Then open the admin dashboard at <http://localhost:3000> and the kiosk at <http://localhost:3000/kiosk>.
 
-This project can be deployed to various platforms. Here are some options:
+### Roster format
 
-### Vercel (Recommended for Next.js)
-1. Push your code to GitHub
-2. Connect your repository to [Vercel](https://vercel.com)
-3. **Note**: Vercel uses serverless functions, so SQLite won't persist between requests
-4. For production, consider using PostgreSQL with Vercel Postgres or another cloud database
+The first sheet of the workbook is read. Headers are matched case-insensitively.
 
-### Self-Hosted
-1. Build the production version:
-   ```bash
-   npm run build
-   ```
-2. Start the production server:
-   ```bash
-   npm start
-   ```
-3. Use a process manager like PM2 to keep it running:
-   ```bash
-   npm install -g pm2
-   pm2 start npm --name "attendance-tracker" -- start
-   ```
+| ID | Name | Email | 2025-09-01 | 9/8/25 | … |
+| --- | --- | --- | --- | --- | --- |
+| 100200 | Ava Nguyen | ava.nguyen@example.edu | present | x | |
 
-## 🔐 Security Considerations
+`ID`, `Name`, and `Email` are required. Any other column whose header is a date (ISO, `M/D/YY`, or a real Excel date cell) is imported as a past session. In those columns, `present`, `p`, `x`, `y`, `yes`, and `1` count as present; anything else counts as absent. Re-importing updates existing students by email instead of duplicating them. The export uses this same layout, so an exported sheet can be imported again.
 
-- **Student data privacy**: The database contains PII (names, emails, student IDs)
-- **Always backup** `prisma/dev.db` regularly
-- **Never commit** the database file to git (already in `.gitignore`)
-- **For production**: Add authentication to protect the admin dashboard
-- **Consider**: Password-protecting the clear session functionality
+## How it works
 
-## 🐛 Known Issues & Future Improvements
+```
+src/
+├── app/
+│   ├── page.tsx              Admin dashboard
+│   ├── kiosk/page.tsx        Check-in kiosk
+│   └── api/
+│       ├── roster/           GET    all students
+│       ├── sessions/         GET    list sessions · POST create one
+│       ├── checkin/          POST   check in · DELETE undo
+│       ├── checkins/         GET    student IDs checked in on a date
+│       ├── clear/            POST   delete a session and its check-ins
+│       ├── import/           POST   upload a roster workbook
+│       └── export/           GET    download the attendance workbook
+└── lib/
+    ├── db.ts                 Prisma client singleton
+    └── dates.ts              Calendar-day helpers shared by client and server
+prisma/
+├── schema.prisma             Student, Session, Checkin
+├── migrations/
+└── seed.mjs                  Fictional demo data
+```
 
-### Potential Enhancements
-- [ ] Add authentication for admin dashboard
-- [ ] Implement role-based access (admin vs. student view)
-- [ ] Add QR code check-in option
-- [ ] Generate analytics/reports (attendance trends, late arrivals)
-- [ ] Email notifications for students who miss multiple sessions
-- [ ] Dark mode toggle
-- [ ] Multi-class support for TAs managing multiple courses
-- [ ] Export to CSV in addition to Excel
-- [ ] Progressive Web App (PWA) support for offline check-ins
+The data model has three tables: `Student`, `Session` (one row per class day), and `Checkin`, which joins them.
 
-## 🤝 Contributing
+A few design decisions:
 
-This is a personal project built for my TA duties, but feel free to fork it and adapt it for your own use! If you have suggestions or find bugs, open an issue or submit a pull request.
+- **No double check-ins.** `Checkin` has a unique constraint on `(studentId, sessionId)`. The API inserts and treats a unique violation (`P2002`) as "already checked in", so two quick taps on the same name can't both succeed.
+- **Sessions are calendar days.** The client sends dates as `YYYY-MM-DD` strings, and the server stores each one as local midnight. An earlier version used `toISOString()`, which made evening classes in US timezones record attendance on the next day. Import handles the same issue for Excel serial dates and ISO headers.
+- **Imports run in one transaction.** A malformed row partway through a roster leaves the database unchanged.
 
-## 📝 License
+## Limitations and next steps
 
-MIT License - feel free to use this for your own classes or projects!
+- **No authentication.** The app is designed for one instructor on a trusted local network. Before deploying it publicly, the admin routes and `/api/clear` need to sit behind a login.
+- **SQLite only.** This works for a single machine. Serverless hosts like Vercel need a hosted database; switching Prisma's `provider` to `postgresql` is the main change.
+- **Ideas:** QR-code check-in from students' own phones, multiple courses per instructor, and attendance trend reports.
 
-## 👨‍💻 Author
+## License
 
-Built with ☕ and frustration with paper attendance sheets by [Your Name]
-
----
-
-**Pro tip**: Set up the kiosk on an iPad near the classroom door. Students can check in as they arrive, and you'll have real-time attendance data without lifting a finger! 🎉
+[MIT](LICENSE)
